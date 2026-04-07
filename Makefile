@@ -6,8 +6,12 @@ UID := $(shell id -u)
 GID := $(shell id -g)
 PWD := $(shell pwd)
 
-# Docker run common parameters
-DOCKER_RUN_BASE := docker run -e UID=$(UID) -e GID=$(GID) -v $(PWD):/home/build/NanoKVM --rm
+# Container runtime (docker, podman, nerdctl, etc). Override via env:
+#   DOCKER_CMD=podman make app
+DOCKER_CMD ?= docker
+
+# Container run common parameters
+DOCKER_RUN_BASE := $(DOCKER_CMD) run -e UID=$(UID) -e GID=$(GID) -v $(PWD):/home/build/NanoKVM --rm
 
 # Build commands
 GO_BUILD_CMD := cd /home/build/NanoKVM/server && go mod tidy && CGO_ENABLED=1 GOOS=linux GOARCH=riscv64 CC=riscv64-unknown-linux-musl-gcc CGO_CFLAGS="-mcpu=c906fdv -march=rv64imafdcv0p7xthead -mcmodel=medany -mabi=lp64d" go build
@@ -24,9 +28,9 @@ help:
 	@echo ""
 	@echo "Available targets:"
 	@echo "  help          - Show this help message"
-	@echo "  check-image   - Check builder Docker image and show versions"
-	@echo "  builder-image - Build Docker image if not exists"
-	@echo "  rebuild-image - Force rebuild Docker image"
+	@echo "  check-image   - Check builder image and show versions"
+	@echo "  builder-image - Build builder image if not exists"
+	@echo "  rebuild-image - Force rebuild builder image"
 	@echo "  shell         - Enter interactive builder environment"
 	@echo "  app           - Build Go application server"
 	@echo "  support       - Build hardware support libraries"
@@ -34,7 +38,8 @@ help:
 	@echo "  clean         - Clean build artifacts"
 	@echo ""
 	@echo "Prerequisites:"
-	@echo "  - Docker must be installed and running"
+	@echo "  - A container runtime (docker or podman) must be installed and running"
+	@echo "  - Override with DOCKER_CMD=podman if docker is not present"
 	@echo "  - Must not run as root user"
 
 # Security check - prevent running as root
@@ -48,25 +53,25 @@ check-root:
 check-image: check-root
 	@echo "Checking builder image..."
 	@echo "Golang version: " && \
-		docker run --rm -i $(IMAGE_NAME) go version && \
+		$(DOCKER_CMD) run --rm -i $(IMAGE_NAME) go version && \
 		echo "" && \
 		echo "Host-tools version:" && \
-		docker run --rm -i $(IMAGE_NAME) riscv64-unknown-linux-musl-gcc -v && \
+		$(DOCKER_CMD) run --rm -i $(IMAGE_NAME) riscv64-unknown-linux-musl-gcc -v && \
 		echo ""
 
-# Build Docker image if it doesn't exist
+# Build builder image if it doesn't exist
 builder-image: check-root
-	@if ! docker image inspect $(IMAGE_NAME) >/dev/null 2>&1; then \
-		echo "Building Docker image..."; \
-		docker build -t $(IMAGE_NAME) -f docker/Dockerfile ./; \
+	@if ! $(DOCKER_CMD) image inspect $(IMAGE_NAME) >/dev/null 2>&1; then \
+		echo "Building builder image..."; \
+		$(DOCKER_CMD) build -t $(IMAGE_NAME) -f docker/Dockerfile ./; \
 	else \
-		echo "Docker image $(IMAGE_NAME) already exists."; \
+		echo "Builder image $(IMAGE_NAME) already exists."; \
 	fi
 
-# Force rebuild Docker image
+# Force rebuild builder image
 rebuild-image: check-root
-	@echo "Force rebuilding Docker image..."
-	@docker build --no-cache -t $(IMAGE_NAME) -f docker/Dockerfile ./
+	@echo "Force rebuilding builder image..."
+	@$(DOCKER_CMD) build --no-cache -t $(IMAGE_NAME) -f docker/Dockerfile ./
 
 # Enter interactive shell (equivalent to build.sh with no arguments)
 shell: check-root builder-image
