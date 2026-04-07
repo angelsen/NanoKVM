@@ -72,6 +72,22 @@ start_usb_dev(){
     echo -ne \\x05\\x01\\x09\\x02\\xa1\\x01\\x09\\x01\\xa1\\x00\\x05\\x09\\x19\\x01\\x29\\x03\\x15\\x00\\x25\\x01\\x95\\x03\\x75\\x01\\x81\\x02\\x95\\x01\\x75\\x05\\x81\\x01\\x05\\x01\\x09\\x30\\x09\\x31\\x15\\x00\\x26\\xff\\x7f\\x35\\x00\\x46\\xff\\x7f\\x75\\x10\\x95\\x02\\x81\\x02\\x05\\x01\\x09\\x38\\x15\\x81\\x25\\x7f\\x35\\x00\\x45\\x00\\x75\\x08\\x95\\x01\\x81\\x06\\xc0\\xc0 > functions/hid.GS2/report_desc
     ln -s functions/hid.GS2 configs/c.1
 
+    # touchscreen (multi-touch protocol B)
+    # Gated on /boot/usb.touch so upstream users who don't want a
+    # touchscreen gadget aren't affected. Uses subclass=0/protocol=0 so
+    # the kernel binds hid-multitouch.c (the real touchscreen driver)
+    # rather than hid-input.c boot-class HID. The Contact Identifier
+    # usage in the descriptor is what triggers HID_GROUP_MULTITOUCH.
+    if [ -e /boot/usb.touch ]
+    then
+        mkdir functions/hid.GS3
+        echo 0 > functions/hid.GS3/subclass
+        echo 0 > functions/hid.GS3/protocol
+        echo 6 > functions/hid.GS3/report_length
+        echo -ne \\x05\\x0d\\x09\\x04\\xa1\\x01\\x09\\x22\\xa1\\x02\\x09\\x42\\x15\\x00\\x25\\x01\\x75\\x01\\x95\\x01\\x81\\x02\\x95\\x07\\x81\\x03\\x75\\x08\\x09\\x51\\x25\\x7f\\x95\\x01\\x81\\x02\\x05\\x01\\x26\\xff\\x7f\\x75\\x10\\x09\\x30\\x35\\x00\\x46\\xff\\x7f\\x81\\x02\\x09\\x31\\x81\\x02\\xc0\\xc0 > functions/hid.GS3/report_desc
+        ln -s functions/hid.GS3 configs/c.1
+    fi
+
     ls /sys/class/udc/ | cat > UDC
     echo device > /proc/cviusb/otg_role
 }

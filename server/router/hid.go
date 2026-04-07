@@ -11,7 +11,8 @@ func hidRouter(r *gin.Engine) {
 	service := hid.NewService()
 	api := r.Group("/api").Use(middleware.CheckToken())
 
-	api.POST("/hid/paste", service.Paste) // paste
+	api.POST("/hid/paste", service.Paste)        // paste
+	api.POST("/hid/touch_tap", service.TouchTap) // touch tap (requires /boot/usb.touch)
 
 	api.GET("/hid/shortcuts", service.GetShortcuts)     // get shortcuts
 	api.POST("/hid/shortcut", service.AddShortcut)      // add shortcut
