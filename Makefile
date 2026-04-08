@@ -10,11 +10,22 @@ PWD := $(shell pwd)
 #   DOCKER_CMD=podman make app
 DOCKER_CMD ?= docker
 
+# Rootless podman maps in-container UIDs via subuid/subgid by default, so the
+# bind mount isn't writable as the host user. --userns=keep-id maps the host
+# UID/GID 1:1 inside the container. Docker uses a different userns model and
+# does not accept this flag, so it's only set when DOCKER_CMD is podman.
+USERNS_FLAG := $(shell [ "$(DOCKER_CMD)" = "podman" ] && echo "--userns=keep-id")
+
 # Container run common parameters
-DOCKER_RUN_BASE := $(DOCKER_CMD) run -e UID=$(UID) -e GID=$(GID) -v $(PWD):/home/build/NanoKVM --rm
+DOCKER_RUN_BASE := $(DOCKER_CMD) run $(USERNS_FLAG) -e UID=$(UID) -e GID=$(GID) -v $(PWD):/home/build/NanoKVM --rm
 
 # Build commands
-GO_BUILD_CMD := cd /home/build/NanoKVM/server && go mod tidy && CGO_ENABLED=1 GOOS=linux GOARCH=riscv64 CC=riscv64-unknown-linux-musl-gcc CGO_CFLAGS="-mcpu=c906fdv -march=rv64imafdcv0p7xthead -mcmodel=medany -mabi=lp64d" go build
+# CGO_LDFLAGS adds an rpath so libkvm.so resolves at runtime relative to the
+# binary's own location. Without it the dynamic loader fails to find
+# libkvm.so on the device since dl_lib/ is not on any system search path.
+# Use \$$ORIGIN: Make expands $$ → $, then bash double-quote treats \$ as
+# literal $, so the linker receives the literal string $ORIGIN/dl_lib.
+GO_BUILD_CMD := cd /home/build/NanoKVM/server && go mod tidy && CGO_ENABLED=1 GOOS=linux GOARCH=riscv64 CC=riscv64-unknown-linux-musl-gcc CGO_CFLAGS="-mcpu=c906fdv -march=rv64imafdcv0p7xthead -mcmodel=medany -mabi=lp64d" CGO_LDFLAGS="-Wl,-rpath,\$$ORIGIN/dl_lib" go build
 SUPPORT_BUILD_CMD := . ./home/build/MaixCDK/bin/activate && cd /home/build/NanoKVM/support/sg2002 && ./build kvm_system && ./build kvm_system add_to_kvmapp
 
 .PHONY: help check-root builder-image rebuild-image check-image shell app support all clean
